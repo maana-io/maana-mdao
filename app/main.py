@@ -74,11 +74,47 @@ def getClient():
 # Wrapping string in gql function provides validation and better error traceback
 type_defs = gql("""
     type Query {
-        models: [Model!]!
+        solve(problem: Problem!): [Result!]!
     }
 
-    type Model {
+    input IndepVarComp {
         id: ID!
+        value: Float!
+    }
+
+    input ExecComp {
+        id: ID!
+        type: String!
+        eq: String!
+    }
+
+    input Driver {
+        id: ID!
+        optimizer: String!
+    }
+
+    input DesignVar {
+        id: ID!
+        lower: Float!
+        upper: Float!
+    }
+
+    input Objective {
+        id: ID!
+    }
+
+    input Problem {
+        id: ID!
+        driver: Driver!
+        indeps: [IndepVarComp!]!
+        exdep: ExecComp!
+        designVars: [DesignVar!]!
+        objective: Objective!
+    }
+
+    type Result {
+        id: ID!
+        value: Float!
     }
 """)
 
@@ -86,8 +122,8 @@ type_defs = gql("""
 query = QueryType()
 
 # Resolvers are simple python functions
-@query.field("models")
-def resolve_models(_, info):
+@query.field("solve")
+def resolve_solve(*_, problem):
 
     # # A resolver can access the graphql client via the context.
     # client = info.context["client"]
@@ -104,46 +140,58 @@ def resolve_models(_, info):
 
     # print(result)
 
-    # build the model
+    # build the problem
     prob = om.Problem()
+
+    # create the indeps
     indeps = prob.model.add_subsystem('indeps', om.IndepVarComp())
-    indeps.add_output('x', 3.0)
-    indeps.add_output('y', -4.0)
+    for indep in problem['indeps']:
+        indeps.add_output(indep['id'], indep['value'])
 
-    prob.model.add_subsystem('paraboloid', om.ExecComp(
-        'f = (x-3)**2 + x*y + (y+4)**2 - 3'))
+    # create the extdep
+    prob.model.add_subsystem(
+        problem['exdep']['type'], om.ExecComp(problem['exdep']['eq']))
 
-    prob.model.connect('indeps.x', 'paraboloid.x')
-    prob.model.connect('indeps.y', 'paraboloid.y')
+    # connect the indeps to the extdep
+    for indep in problem['indeps']:
+        prob.model.connect(
+            'indeps.' + indep['id'], problem['exdep']['type'] + '.' + indep['id'])
 
+    # create the driver
     prob.driver = om.ScipyOptimizeDriver()
-    prob.driver.options['optimizer'] = 'SLSQP'
+    prob.driver.options['optimizer'] = problem['driver']['optimizer']
 
-    prob.model.add_design_var('indeps.x', lower=-50, upper=50)
-    prob.model.add_design_var('indeps.y', lower=-50, upper=50)
-    prob.model.add_objective('paraboloid.f')
+    # add the design variables
+    for designVar in problem['designVars']:
+        prob.model.add_design_var(
+            designVar['id'], lower=designVar['lower'], upper=designVar['upper'])
+
+    # add the objective
+    prob.model.add_objective(problem['objective']['id'])
 
     prob.setup()
     prob.run_driver()
 
-    # minimum value
-    print(prob['paraboloid.f'])
-    # location of the minimum
-    print(prob['indeps.x'])
-    print(prob['indeps.y'])
+    results = [
+        {'id': problem['objective']['id'],
+            'value': prob[problem['objective']['id']]}
+    ]
 
-    return []
+    for designVar in problem['designVars']:
+        results.append({'id': designVar['id'], 'value': prob[designVar['id']]})
+
+    return results
 
 
 # Map resolver functions to custom type fields using ObjectType
-model = ObjectType("Model")
+# problem = ObjectType("Problem")
 
-# @model.field("fullName")
-# def resolve_person_fullname(model, *_):
-#     return "%s %s" % (model["firstName"], model["lastName"])
+# @problem.field("fullName")
+# def resolve_person_fullname(problem, *_):
+#     return "%s %s" % (problem["firstName"], problem["lastName"])
 
 # Create executable GraphQL schema
-schema = make_executable_schema(type_defs, [query, model])
+schema = make_executable_schema(type_defs, [query])
 
 # --- ASGI app
 

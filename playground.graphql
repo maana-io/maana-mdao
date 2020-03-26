@@ -1,0 +1,22 @@
+query {
+  solve(
+    problem: {
+      id: "sample"
+      indeps: [{ id: "x", value: 3.0 }, { id: "y", value: -4.0 }]
+      exdep: {
+        id: "paraboloid.f"
+        type: "paraboloid"
+        eq: "f = (x-3)**2 + x*y + (y+4)**2 - 3"
+      }
+      driver: { id: "SciPy", optimizer: "SLSQP" }
+      designVars: [
+        { id: "indeps.x", lower: -50, upper: 50 }
+        { id: "indeps.y", lower: -50, upper: 50 }
+      ]
+      objective: { id: "paraboloid.f" }
+    }
+  ) {
+    id
+    value
+  }
+}
