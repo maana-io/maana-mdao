@@ -1,7 +1,9 @@
 from ariadne import ObjectType, QueryType, MutationType, gql, make_executable_schema
 from ariadne.asgi import GraphQL
-from asgi_lifespan import Lifespan, LifespanMiddleware
 from graphqlclient import GraphQLClient
+
+# MDAO
+import openmdao.api as om
 
 # HTTP request library for access token call
 import requests
@@ -72,14 +74,11 @@ def getClient():
 # Wrapping string in gql function provides validation and better error traceback
 type_defs = gql("""
     type Query {
-        people: [Person!]!
+        models: [Model!]!
     }
 
-    type Person {
-        firstName: String
-        lastName: String
-        age: Int
-        fullName: String
+    type Model {
+        id: ID!
     }
 """)
 
@@ -87,8 +86,8 @@ type_defs = gql("""
 query = QueryType()
 
 # Resolvers are simple python functions
-@query.field("people")
-def resolve_people(_, info):
+@query.field("models")
+def resolve_models(_, info):
 
     # # A resolver can access the graphql client via the context.
     # client = info.context["client"]
@@ -105,23 +104,46 @@ def resolve_people(_, info):
 
     # print(result)
 
-    return [
-        {"firstName": "Marie", "lastName": "Curie", "age": 21},
-        {"firstName": "Rubab", "lastName": "Nedzo", "age": 24},
-    ]
+    # build the model
+    prob = om.Problem()
+    indeps = prob.model.add_subsystem('indeps', om.IndepVarComp())
+    indeps.add_output('x', 3.0)
+    indeps.add_output('y', -4.0)
+
+    prob.model.add_subsystem('paraboloid', om.ExecComp(
+        'f = (x-3)**2 + x*y + (y+4)**2 - 3'))
+
+    prob.model.connect('indeps.x', 'paraboloid.x')
+    prob.model.connect('indeps.y', 'paraboloid.y')
+
+    prob.driver = om.ScipyOptimizeDriver()
+    prob.driver.options['optimizer'] = 'SLSQP'
+
+    prob.model.add_design_var('indeps.x', lower=-50, upper=50)
+    prob.model.add_design_var('indeps.y', lower=-50, upper=50)
+    prob.model.add_objective('paraboloid.f')
+
+    prob.setup()
+    prob.run_driver()
+
+    # minimum value
+    print(prob['paraboloid.f'])
+    # location of the minimum
+    print(prob['indeps.x'])
+    print(prob['indeps.y'])
+
+    return []
 
 
 # Map resolver functions to custom type fields using ObjectType
-person = ObjectType("Person")
+model = ObjectType("Model")
 
-
-@person.field("fullName")
-def resolve_person_fullname(person, *_):
-    return "%s %s" % (person["firstName"], person["lastName"])
-
+# @model.field("fullName")
+# def resolve_person_fullname(model, *_):
+#     return "%s %s" % (model["firstName"], model["lastName"])
 
 # Create executable GraphQL schema
-schema = make_executable_schema(type_defs, [query, person])
+schema = make_executable_schema(type_defs, [query, model])
 
 # --- ASGI app
 
@@ -129,25 +151,3 @@ schema = make_executable_schema(type_defs, [query, person])
 # Set context with authenticated graphql client.
 app = GraphQL(
     schema, debug=True, context_value={'client': getClient()})
-
-# 'Lifespan' is a standalone ASGI app.
-# It implements the lifespan protocol,
-# and allows registering lifespan event handlers.
-lifespan = Lifespan()
-
-
-@lifespan.on_event("startup")
-async def startup():
-    print("Starting up...")
-    print("... done!")
-
-
-@lifespan.on_event("shutdown")
-async def shutdown():
-    print("Shutting down...")
-    print("... done!")
-
-# 'LifespanMiddleware' returns an ASGI app.
-# It forwards lifespan requests to 'lifespan',
-# and anything else goes to 'app'.
-app = LifespanMiddleware(app, lifespan=lifespan)

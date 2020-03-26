@@ -8,7 +8,7 @@
 
 ### Maana Q Client (i.e., peer-to-peer)
 
-It is possible, though not generally preferred, for services to depend directly on other services, passing requests through a secure CKG endpoint.  This template includes the necessary authentication code for your convenience.  Simply supply environment settings and use the `client` from the GraphQL context:
+It is possible, though not generally preferred, for services to depend directly on other services, passing requests through a secure CKG endpoint. This template includes the necessary authentication code for your convenience. Simply supply environment settings and use the `client` from the GraphQL context:
 
 ```bash
 #
@@ -36,7 +36,7 @@ AUTH_SECRET=
 
 # Auth audience for JWT
 # Set to same value as REACT_APP_PORTAL_AUTH_IDENTIFIER in Maana Q deployment ENVs)
-# NOTE: For use of keycloak in this app, this value should match both the realm and audience values. 
+# NOTE: For use of keycloak in this app, this value should match both the realm and audience values.
 AUTH_IDENTIFIER=
 ```
 
@@ -61,7 +61,7 @@ And, in your resolver:
 
 ## Build
 
-```
+```bash
 pip install uvicorn gunicorn ariadne graphqlclient asgi-lifespan python-dotenv requests
 pip install openmdao[all]
 ```
@@ -70,7 +70,7 @@ pip install openmdao[all]
 
 Then you can build your image from the directory that has your Dockerfile, e.g:
 
-```
+```bash
 docker build -t my-service ./
 ```
 
@@ -78,7 +78,7 @@ docker build -t my-service ./
 
 To run the GraphQL service locally with hot reload:
 
-```
+```bash
 ./start-reload.sh
 ```
 
@@ -90,7 +90,7 @@ For details, please refer to the [official documentation](https://github.com/tia
 
 To run the GraphQL service locally (Via Docker):
 
-```
+```bash
 docker run -it -p 4000:80 -t my-service
 ```
 
@@ -100,7 +100,7 @@ and visit http://0.0.0.0:4000
 
 To run the GraphQL service via Docker with hot reload:
 
-```
+```bash
 docker run -it -p 4000:80 -v $(pwd):/app my-service /start-reload-docker.sh
 ```
 
@@ -118,7 +118,7 @@ Note that if you require additional packages such as pandas and numpy you need t
 
 To simplify deployment to your Maana Q Kubernetes cluster, use the [CLI `mdeploy` command](https://github.com/maana-io/q-cli#mdeploy):
 
-```
+```bash
 gql mdeploy
 ```
 
